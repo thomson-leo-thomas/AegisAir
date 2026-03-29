@@ -5,11 +5,12 @@ import { ref, onValue, query, limitToLast } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useUserRole } from "@/hooks/useUserRole";
 import { calcRiskScore } from "@/lib/riskCalculator";
+import { parseFirebaseKeyToTimestamp } from "@/lib/timeUtils";
 import { Download } from "lucide-react";
 
 const HISTORY_LIMIT = 25000;
 
-type ExportRange = "1h" | "24h" | "7d";
+type ExportRange = "1h" | "24h" | "7d" | "all";
 
 function escapeCsvField(s: string): string {
     if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -18,19 +19,21 @@ function escapeCsvField(s: string): string {
 
 function buildCsvRows(
     raw: Record<string, { gasValue?: number; temperature?: number; humidity?: number }>,
-    fromMs: number
+    fromMs: number | null
 ): { line: string }[] {
     const rows: { ts: number; line: string }[] = [];
 
     for (const [tsKey, entry] of Object.entries(raw)) {
-        const timestamp = Number(tsKey);
-        if (!Number.isFinite(timestamp) || timestamp < fromMs) continue;
+        const timestamp = parseFirebaseKeyToTimestamp(tsKey);
+        
+        // Only filter if fromMs is provided and we actually have a valid timestamp
+        if (fromMs !== null && Number.isFinite(timestamp) && timestamp < fromMs) continue;
 
         const gas = entry.gasValue ?? 0;
         const temp = entry.temperature ?? 0;
         const humidity = entry.humidity ?? 0;
         const risk = parseFloat(calcRiskScore(gas, temp, humidity, false).toFixed(1));
-        const iso = new Date(timestamp).toISOString();
+        const iso = Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : `Unknown (${tsKey})`;
 
         const line = [
             escapeCsvField(iso),
@@ -40,7 +43,7 @@ function buildCsvRows(
             String(risk),
         ].join(",");
 
-        rows.push({ ts: timestamp, line });
+        rows.push({ ts: Number.isFinite(timestamp) ? timestamp : 0, line });
     }
 
     rows.sort((a, b) => a.ts - b.ts);
@@ -50,7 +53,7 @@ function buildCsvRows(
 export default function ReportsPage() {
     const { profile } = useUserRole();
     const deviceId = profile?.deviceId || "esp32-001";
-    const [exportRange, setExportRange] = useState<ExportRange>("1h");
+    const [exportRange, setExportRange] = useState<ExportRange>("all");
     const [historyRaw, setHistoryRaw] = useState<Record<
         string,
         { gasValue?: number; temperature?: number; humidity?: number }
@@ -79,6 +82,7 @@ export default function ReportsPage() {
     }, [deviceId]);
 
     const rangeFromMs = useMemo(() => {
+        if (exportRange === "all") return null;
         const now = Date.now();
         if (exportRange === "1h") return now - 60 * 60 * 1000;
         if (exportRange === "24h") return now - 24 * 60 * 60 * 1000;
@@ -125,6 +129,7 @@ export default function ReportsPage() {
                     <div className="text-sm text-slate-300 mb-2">Time range</div>
                     <div className="flex flex-wrap gap-2">
                         {([
+                            ["all", "all" as const, "All Time"],
                             ["1h", "1h" as const, "Last hour"],
                             ["24h", "24h" as const, "Last 24 hours"],
                             ["7d", "7d" as const, "Last 7 days"],

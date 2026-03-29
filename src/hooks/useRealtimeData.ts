@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { ref, onValue, update, query, limitToLast } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { calcRiskScore, classifyRisk, RiskLevel } from "@/lib/riskCalculator";
+import { parseFirebaseKeyToTimestamp } from "@/lib/timeUtils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -174,9 +175,9 @@ export function useRealtimeData(deviceId: string) {
             const anomaly = detectAnomalies(gasVal, tempVal, humVal, gasWindow.current);
 
             setData((prev) => {
-                // Handle actuators from either nested or flat structure, and strings ("ON", "OFF", "OPEN", "CLOSED")
+                // Handle actuators from either nested or flat structure, and strings ("ON", "OFF", "OPEN", "CLOSED", "true", "false")
                 const rawActuators = val.actuators || {};
-                const parseBool = (v: any) => v === true || v === "ON" || v === "OPEN" || v === "1" || v === 1;
+                const parseBool = (v: any) => v === true || v === "true" || v === "ON" || v === "OPEN" || v === "1" || v === 1;
 
                 const actuators = {
                     buzzer: rawActuators.buzzer !== undefined ? parseBool(rawActuators.buzzer) : (val.buzzer !== undefined ? parseBool(val.buzzer) : prev.actuators.buzzer),
@@ -222,7 +223,7 @@ export function useRealtimeData(deviceId: string) {
 
             const entries: HistoryEntry[] = Object.entries(raw)
                 .map(([ts, entry]) => ({
-                    timestamp: Number(ts),
+                    timestamp: parseFirebaseKeyToTimestamp(ts),
                     gas: entry.gasValue ?? 0,
                     temp: entry.temperature ?? 0,
                     humidity: entry.humidity ?? 0,
