@@ -262,20 +262,6 @@ Instantly updates dashboard controls while hardware actions execute asynchronous
 
 ---
 
-## Project Structure
-
-```text
-AegisAir/
-├── firmware/        # ESP32 embedded code
-├── backend/         # API and WebSocket server
-├── dashboard/       # Next.js frontend
-├── algorithms/      # Hazard detection logic
-├── hardware/        # Circuit schematics
-├── docs/            # Documentation and diagrams
-└── README.md
-```
-
----
 
 ## Applications
 
